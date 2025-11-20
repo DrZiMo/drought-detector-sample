@@ -51,7 +51,7 @@ class DroughtPredict:
         df['water_deficit'] = (
             df['EVPTRNS'] - df['PRECTOTCORR']).clip(lower=0)
         df['evap_ratio'] = df['PRECTOTCORR'] / \
-            (df['EVPTRNS'] + 0.001)  # Avoid division by zero
+            (df['EVPTRNS'] + 0.001)  # Avoiding division by zero
         return df
 
     def calculate_vapor_pressure_deficit(self, df):
@@ -63,19 +63,17 @@ class DroughtPredict:
     def classify(self, row):
         risk_score = 0
 
-        # === SOIL MOISTURE (Highest Priority - 35% weight) ===
-        if row.get("GWETROOT", 1.0) < 0.25:    # Severe soil moisture deficit
+        if row.get("GWETROOT", 1.0) < 0.25:
             risk_score += 4
-        elif row.get("GWETROOT", 1.0) < 0.35:  # Moderate deficit
+        elif row.get("GWETROOT", 1.0) < 0.35:
             risk_score += 3
-        elif row.get("GWETROOT", 1.0) < 0.45:  # Mild deficit
+        elif row.get("GWETROOT", 1.0) < 0.45:
             risk_score += 1
 
         if row.get("GWETTOP", 1.0) < 0.2:
             risk_score += 2
 
-        # === PRECIPITATION & WATER BALANCE ===
-        if row.get("PRECTOTCORR", 5) < 1.0:   # No or very little rain
+        if row.get("PRECTOTCORR", 5) < 1.0:
             risk_score += 3
         elif row.get("PRECTOTCORR", 5) < 3.0:
             risk_score += 2
@@ -83,13 +81,13 @@ class DroughtPredict:
             risk_score += 1
 
         water_balance = row.get("PRECTOTCORR", 0) - row.get("EVPTRNS", 0)
-        if water_balance < -2.0:  # Lowered threshold
+        if water_balance < -2.0:
             risk_score += 3
         elif water_balance < -1.0:
             risk_score += 2
 
         cdd = row.get("CDD0", 0)
-        if cdd > 25:  # Lowered threshold
+        if cdd > 25:
             risk_score += 4
         elif cdd > 15:
             risk_score += 3
@@ -98,8 +96,7 @@ class DroughtPredict:
         elif cdd > 5:
             risk_score += 1
 
-        # === TEMPERATURE & ENERGY ===
-        if row.get("T2M", 20) > 33:  # Slightly lower thresholds
+        if row.get("T2M", 20) > 33:
             risk_score += 3
         elif row.get("T2M", 20) > 30:
             risk_score += 2
@@ -116,7 +113,6 @@ class DroughtPredict:
         elif row.get("ALLSKY_SFC_SW_DWN", 15) > 18:
             risk_score += 1
 
-        # === ATMOSPHERIC CONDITIONS ===
         if row.get("RH2M", 50) < 30:
             risk_score += 2
         elif row.get("RH2M", 50) < 40:
@@ -135,12 +131,11 @@ class DroughtPredict:
         elif row.get("EVPTRNS", 3) > 4:
             risk_score += 1
 
-        # === DROUGHT CATEGORIZATION (Adjusted) ===
-        if risk_score >= 12:   # Lowered threshold for extreme
+        if risk_score >= 12:
             return 3
-        elif risk_score >= 8:  # High/Severe
+        elif risk_score >= 8:
             return 2
-        elif risk_score >= 5:  # Medium
+        elif risk_score >= 5:
             return 1
         else:
             return 0
@@ -158,36 +153,31 @@ class DroughtPredict:
         for i, row in df.iterrows():
             risk_score = 0
 
-            # Current conditions (60% weight)
             current_risk = self.classify(row)
             risk_score += current_risk * 0.6
 
-            # Recent trends (40% weight)
             if i > 0:
-                # Check if conditions are worsening
                 prev_soil_moisture = df.loc[i-1, 'GWETROOT']
-                if row['GWETROOT'] < prev_soil_moisture * 0.9:  # Soil drying rapidly
+                if row['GWETROOT'] < prev_soil_moisture * 0.9:
                     risk_score += 2
 
                 prev_precip = df.loc[i-1, 'PRECTOTCORR']
-                if row['PRECTOTCORR'] < prev_precip * 0.5:  # Precipitation decreasing
+                if row['PRECTOTCORR'] < prev_precip * 0.5:
                     risk_score += 1
 
-            # Use rolling averages for context
-            if row['precip_7day_avg'] < 1.0:  # Very dry recent week
+            if row['precip_7day_avg'] < 1.0:
                 risk_score += 2
-            if row['soil_moisture_7day_avg'] < 0.25:  # Consistently dry soil
+            if row['soil_moisture_7day_avg'] < 0.25:
                 risk_score += 2
 
-            # Final categorization
             if risk_score >= 4:
-                drought_categories.append(3)  # Extreme
+                drought_categories.append(3)
             elif risk_score >= 2.5:
-                drought_categories.append(2)  # Severe
+                drought_categories.append(2)
             elif risk_score >= 1.5:
-                drought_categories.append(1)  # Moderate
+                drought_categories.append(1)
             else:
-                drought_categories.append(0)  # None/Low
+                drought_categories.append(0)
 
         return drought_categories
 
