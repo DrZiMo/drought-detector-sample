@@ -2,9 +2,13 @@ import pandas as pd
 import joblib
 import json
 import sys
+import os
 
-model = joblib.load('drought_model.pkl')
-scaler = joblib.load('scaler.pkl')
+model_path = os.path.join(os.path.dirname(__file__), 'drought_model.pkl')
+scaler_path = os.path.join(os.path.dirname(__file__), 'scaler.pkl')
+
+model = joblib.load(model_path)
+scaler = joblib.load(scaler_path)
 
 input_data = json.loads(sys.stdin.read())
 df = pd.DataFrame([input_data])
