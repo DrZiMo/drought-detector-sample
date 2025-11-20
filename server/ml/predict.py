@@ -15,12 +15,10 @@ df = pd.DataFrame([input_data])
 
 feature_order = list(scaler.feature_names_in_)
 
-# Ensure all features exist (fill missing ones with 0)
 for feature in feature_order:
     if feature not in df.columns:
-        df[feature] = 0  # or another default value
+        df[feature] = 0
 
-# Reorder columns to match scaler
 df = df[feature_order]
 df_scaled = scaler.transform(df)
 
