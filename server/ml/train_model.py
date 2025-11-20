@@ -1,6 +1,11 @@
 from datetime import datetime, timedelta
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
 import requests
 import pandas as pd
+import joblib
 
 
 class DroughtPredict:
@@ -8,8 +13,11 @@ class DroughtPredict:
         self.LAT = 9.5612
         self.LON = 44.0669
 
-        self.number_of_days = 30
-        self.end_date = "2025101"
+        self.number_of_days = 10950
+        self.end_date = "20251001"
+
+        self.drought_labels = {0: 'No Drought',
+                               1: "Moderate", 2: 'Severe', 3: 'Extreme'}
 
         self.PARAMETERS = [
             "PRECTOTCORR",           # Precipitation
@@ -38,55 +46,6 @@ class DroughtPredict:
 
         return data
 
-    def classify(self, row):
-        risk_score = 0
-
-        # --- Precipitation ---
-        if row.get("PRECTOTCORR", 0) < 1:
-            risk_score += 3
-        elif row.get("PRECTOTCORR", 0) < 3:
-            risk_score += 2
-
-        # --- Temperature ---
-        if row.get("T2M", 0) > 30:
-            risk_score += 2
-        if row.get("TS_MAX", 0) > 32:
-            risk_score += 1
-        if row.get("TS_MIN", 0) > 25:
-            risk_score += 1
-
-        # --- Humidity ---
-        if row.get("RH2M", 100) < 40:
-            risk_score += 2
-        if row.get("QV2M", 100) < 5:
-            risk_score += 1
-
-        # --- Wind Speed ---
-        if row.get("WS2M", 0) > 5:
-            risk_score += 1
-
-        # --- Solar Radiation ---
-        if row.get("ALLSKY_SFC_SW_DWN", 0) > 20:
-            risk_score += 1
-
-        # --- Evapotranspiration ---
-        if row.get("EVPTRNS", 0) > 4:
-            risk_score += 2
-        if row.get("EVLAND", 0) > 4:
-            risk_score += 1
-
-        # --- Consecutive Dry Days ---
-        if row.get("CDD0", 0) > 15:
-            risk_score += 2
-
-        # --- Convert to label ---
-        if risk_score >= 8:
-            return 2  # High risk
-        elif risk_score >= 4:
-            return 1  # Medium risk
-        else:
-            return 0  # Low risk
-
     def calculate_water_balance(self, df):
         df['water_balance'] = df['PRECTOTCORR'] - df['EVPTRNS']
         df['water_deficit'] = (
@@ -105,98 +64,86 @@ class DroughtPredict:
         risk_score = 0
 
         # === SOIL MOISTURE (Highest Priority - 35% weight) ===
-        # Root zone soil wetness (most critical for plants)
-        if row.get("GWETROOT", 1.0) < 0.2:    # Severe soil moisture deficit
+        if row.get("GWETROOT", 1.0) < 0.25:    # Severe soil moisture deficit
             risk_score += 4
-        elif row.get("GWETROOT", 1.0) < 0.3:  # Moderate deficit
+        elif row.get("GWETROOT", 1.0) < 0.35:  # Moderate deficit
             risk_score += 3
-        elif row.get("GWETROOT", 1.0) < 0.4:  # Mild deficit
+        elif row.get("GWETROOT", 1.0) < 0.45:  # Mild deficit
             risk_score += 1
 
-        # Surface soil wetness
-        if row.get("GWETTOP", 1.0) < 0.15:    # Very dry surface
+        if row.get("GWETTOP", 1.0) < 0.2:
             risk_score += 2
 
-        # === PRECIPITATION & WATER BALANCE (30% weight) ===
-        # Current precipitation deficit
-        if row.get("PRECTOTCORR", 5) < 0.5:   # No rain
+        # === PRECIPITATION & WATER BALANCE ===
+        if row.get("PRECTOTCORR", 5) < 1.0:   # No or very little rain
             risk_score += 3
-        elif row.get("PRECTOTCORR", 5) < 2.0:  # Very light rain
+        elif row.get("PRECTOTCORR", 5) < 3.0:
             risk_score += 2
-        elif row.get("PRECTOTCORR", 5) < 5.0:  # Light rain
+        elif row.get("PRECTOTCORR", 5) < 5.0:
             risk_score += 1
 
-        # Water balance (Precipitation - Evapotranspiration)
         water_balance = row.get("PRECTOTCORR", 0) - row.get("EVPTRNS", 0)
-        if water_balance < -3.0:              # Large water deficit
+        if water_balance < -2.0:  # Lowered threshold
             risk_score += 3
-        elif water_balance < -1.0:            # Moderate deficit
+        elif water_balance < -1.0:
             risk_score += 2
 
-        # Consecutive Dry Days (accumulated stress)
         cdd = row.get("CDD0", 0)
-        if cdd > 30:                          # Extreme dry spell
+        if cdd > 25:  # Lowered threshold
             risk_score += 4
-        elif cdd > 20:                        # Severe dry spell
+        elif cdd > 15:
             risk_score += 3
-        elif cdd > 10:                        # Moderate dry spell
+        elif cdd > 10:
             risk_score += 2
-        elif cdd > 5:                         # Mild dry spell
+        elif cdd > 5:
             risk_score += 1
 
-        # === TEMPERATURE & ENERGY (20% weight) ===
-        # High temperatures increase evaporation
-        if row.get("T2M", 20) > 35:           # Extreme heat
+        # === TEMPERATURE & ENERGY ===
+        if row.get("T2M", 20) > 33:  # Slightly lower thresholds
             risk_score += 3
-        elif row.get("T2M", 20) > 30:         # High temperature
+        elif row.get("T2M", 20) > 30:
             risk_score += 2
-        elif row.get("T2M", 20) > 25:         # Warm
+        elif row.get("T2M", 20) > 25:
             risk_score += 1
 
-        # Temperature extremes
-        if row.get("TS_MAX", 25) > 38:        # Very hot days
+        if row.get("TS_MAX", 25) > 36:
             risk_score += 2
-        if row.get("TS_MIN", 15) > 28:        # Hot nights (no relief)
+        if row.get("TS_MIN", 15) > 27:
             risk_score += 2
 
-        # Solar radiation (drives evaporation)
-        if row.get("ALLSKY_SFC_SW_DWN", 15) > 25:  # Very high solar radiation
+        if row.get("ALLSKY_SFC_SW_DWN", 15) > 23:
             risk_score += 2
-        elif row.get("ALLSKY_SFC_SW_DWN", 15) > 20:  # High solar radiation
+        elif row.get("ALLSKY_SFC_SW_DWN", 15) > 18:
             risk_score += 1
 
-        # === ATMOSPHERIC CONDITIONS (15% weight) ===
-        # Low humidity increases evaporation
-        if row.get("RH2M", 50) < 25:          # Very dry air
+        # === ATMOSPHERIC CONDITIONS ===
+        if row.get("RH2M", 50) < 30:
             risk_score += 2
-        elif row.get("RH2M", 50) < 35:        # Dry air
+        elif row.get("RH2M", 50) < 40:
             risk_score += 1
 
-        # Vapor Pressure Deficit (if calculated)
-        if 'vpd' in row and row['vpd'] > 25:  # High VPD - plants stressed
+        if 'vpd' in row and row['vpd'] > 20:
             risk_score += 2
 
-        # Wind speed (increases evaporation)
-        if row.get("WS10M", 2) > 8:           # High winds
+        if row.get("WS10M", 2) > 7:
             risk_score += 1
-        elif row.get("WS10M", 2) > 5:         # Moderate winds
+        elif row.get("WS10M", 2) > 5:
             risk_score += 1
 
-        # Evapotranspiration rates
-        if row.get("EVPTRNS", 3) > 6:         # Very high ET
+        if row.get("EVPTRNS", 3) > 5:
             risk_score += 2
-        elif row.get("EVPTRNS", 3) > 4:       # High ET
+        elif row.get("EVPTRNS", 3) > 4:
             risk_score += 1
 
-        # === DROUGHT CATEGORIZATION ===
-        if risk_score >= 15:
-            return 3  # Extreme drought
-        elif risk_score >= 10:
-            return 2  # High risk/Severe drought
-        elif risk_score >= 6:
-            return 1  # Medium risk/Moderate drought
+        # === DROUGHT CATEGORIZATION (Adjusted) ===
+        if risk_score >= 12:   # Lowered threshold for extreme
+            return 3
+        elif risk_score >= 8:  # High/Severe
+            return 2
+        elif risk_score >= 5:  # Medium
+            return 1
         else:
-            return 0  # Low risk/No drought
+            return 0
 
     def advanced_classify_with_context(self, df):
         df['precip_7day_avg'] = df['PRECTOTCORR'].rolling(
@@ -264,10 +211,8 @@ class DroughtPredict:
         df['drought_category_advanced'] = self.advanced_classify_with_context(
             df)
 
-        drought_labels = {0: 'No Drought',
-                          1: "Moderate", 2: 'Severe', 3: 'Extreme'}
         df['drought_label'] = df['drought_category_advanced'].map(
-            drought_labels)
+            self.drought_labels)
 
         return df
 
@@ -283,27 +228,53 @@ class DroughtPredict:
         print(f"Period: {self.number_of_days} days")
         print(f"Data Points: {len(df)}")
 
-        print("\nRecent Conditions:")
-        recent = df[['PRECTOTCORR', 'GWETROOT',
-                     'T2M', 'drought_label']]
-        print(recent.to_string(index=False))
+        # print("\nRecent Conditions:")
+        # recent = df[['PRECTOTCORR', 'GWETROOT',
+        #              'T2M', 'drought_label']]
+        # print(recent.to_string(index=False))
 
         print(f"\nDrought Distribution:")
         print(df['drought_label'].value_counts().sort_index())
 
         print(f"\nKey Statistics:")
         print(
+            f"Drought: {self.drought_labels[round(int(df['drought_category_basic'].mean()))]}")
+        print(
             f"Average Precipitation: {df['PRECTOTCORR'].mean():.2f} mm/day")
         print(f"Average Soil Moisture: {df['GWETROOT'].mean():.3f}")
         print(f"Average Temperature: {df['T2M'].mean():.1f}°C")
 
+    def train(self, df):
+        X = df[self.PARAMETERS]
+        y = df['drought_category_basic']
 
-# Usage
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42)
+
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.fit_transform(X_test)
+
+        model = RandomForestClassifier(
+            n_estimators=200, max_depth=12, random_state=42)
+        model.fit(X_train, y_train)
+
+        preds = model.predict(X_test)
+        print(classification_report(y_test, preds))
+
+        joblib.dump(model, "dought_model.pkl")
+        joblib.dump(scaler, 'scaler.pkl')
+
+
 if __name__ == "__main__":
+    state = 'Training ...'
     predictor = DroughtPredict()
     results_df = predictor.run_prediction()
 
     if results_df is not None:
         predictor.print_results(results_df)
+        predictor.train(results_df)
+        state = 'Done'
+
     else:
         print("Failed to get prediction results")
