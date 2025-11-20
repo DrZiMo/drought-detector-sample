@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon index.ts"
+    "dev": "nodemon index.ts",
+    "train": "ml\\venv\\Scripts\\python.exe ml\\train_model.py",
+    "save-pkg": "ml\\venv\\Scripts\\python.exe -m pip freeze > requirements.txt"
   },
   "keywords": [],
   "author": "",
