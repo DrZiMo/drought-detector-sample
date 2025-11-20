@@ -252,7 +252,7 @@ class DroughtPredict:
         preds = model.predict(X_test)
         print(classification_report(y_test, preds))
 
-        joblib.dump(model, "dought_model.pkl")
+        joblib.dump(model, "drought_model.pkl")
         joblib.dump(scaler, 'scaler.pkl')
 
 
