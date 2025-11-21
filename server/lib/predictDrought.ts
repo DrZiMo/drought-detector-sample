@@ -1,7 +1,8 @@
 import { spawn } from 'child_process'
 import path from 'path'
+import { WeatherData } from '../types/weatherInputs'
 
-export const predictDrought = (inputData: any) => {
+export const predictDrought = (inputData: WeatherData) => {
   return new Promise((res, rej) => {
     const py = spawn('python', [path.join(__dirname, '../ml/predict.py')], {
       stdio: ['pipe', 'pipe', 'pipe'],

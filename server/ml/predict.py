@@ -24,4 +24,4 @@ df_scaled = scaler.transform(df)
 
 pred = model.predict(df_scaled)[0]
 
-print("Predicted drought class:", pred)
+print(pred)
