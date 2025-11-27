@@ -71,7 +71,7 @@ export class WeatherService {
       const weatherbitData: Partial<WeatherData> = {
         PRECTOTCORR,
         EVPTRNS,
-        EVLAND: EVPTRNS, // same
+        EVLAND: EVPTRNS,
         GWETROOT,
         GWETTOP,
         GWETPROF,
