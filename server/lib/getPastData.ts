@@ -1,7 +1,7 @@
 import { sanitizeData } from './sanitizeData'
 export const getPastData = async (lat: number, lon: number) => {
   try {
-    const numberOfDays = 21
+    const numberOfDays = 9
     const end = new Date()
     const start = new Date(end.getTime() - numberOfDays * 24 * 60 * 60 * 1000)
 
@@ -9,7 +9,7 @@ export const getPastData = async (lat: number, lon: number) => {
       const year = date.getFullYear()
       const month = (date.getMonth() + 1).toString().padStart(2, '0')
       const day = date.getDate().toString().padStart(2, '0')
-      return `${year}-${month}-${day}`
+      return `${year}${month}${day}`
     }
 
     const formattedStart = formatDate(start)

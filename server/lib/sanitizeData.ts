@@ -41,8 +41,13 @@ export const sanitizeData = (rawData: any) => {
     )
       continue
 
+    const formattedDate = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(
+      6,
+      8
+    )}`
+
     cleaned.push({
-      date,
+      date: formattedDate,
       GWETROOT,
       GWETTOP,
       PRECTOTCORR,
