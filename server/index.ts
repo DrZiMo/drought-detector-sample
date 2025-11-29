@@ -2,8 +2,15 @@ import express from 'express'
 import 'dotenv/config'
 import { predictFn } from './controllers/predict'
 import { getFullData } from './controllers/data'
+import cors from 'cors'
 
 const app = express()
+
+app.use(
+  cors({
+    origin: 'http://localhost:5175',
+  })
+)
 
 app.get('/api/predict', predictFn)
 app.get('/api/data', getFullData)

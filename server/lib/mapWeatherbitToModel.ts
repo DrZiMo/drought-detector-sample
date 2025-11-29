@@ -25,7 +25,7 @@ export const mapWeatherbitToModel = (weatherbitResponse: any) => {
     const date = item.valid_date
 
     data.push({
-      date,
+      date: date.replace(/-/g, ''),
       GWETROOT: item.soilm_40_100cm,
       GWETTOP: item.soilm_0_10cm,
       PRECTOTCORR: item.precip,
